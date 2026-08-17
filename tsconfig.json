@@ -1,17 +1,20 @@
 {
   "compilerOptions": {
-    "target": "esnext",
-    "module": "esnext",
-    "lib": ["esnext", "dom"],
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleDetection": "force",
+    "lib": ["ESNext"],
     "types": ["@cloudflare/workers-types", "bun"],
-    "moduleResolution": "node",
-    "isolatedModules": false,
+
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+
     "strict": true,
-    "allowSyntheticDefaultImports": true,
-    "declaration": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true
   },
-  "include": ["src", "tests"],
-  "exclude": ["node_modules"]
+  "include": ["src", "tests"]
 }

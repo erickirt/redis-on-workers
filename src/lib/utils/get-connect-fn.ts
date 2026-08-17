@@ -10,7 +10,7 @@ export async function getConnectFn(fn?: CreateRedisOptions["connectFn"]) {
     );
 
     return connect;
-  } catch (_e) {
+  } catch {
     try {
       const { connect } = await import(
         /* webpackIgnore: true */
@@ -18,7 +18,7 @@ export async function getConnectFn(fn?: CreateRedisOptions["connectFn"]) {
       );
 
       return connect;
-    } catch (_e) {
+    } catch {
       throw new Error("No socket provider found");
     }
   }

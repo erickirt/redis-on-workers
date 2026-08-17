@@ -27,11 +27,7 @@ function createParserContext(options: CreateParserOptions) {
 
 type ParserContext = ReturnType<typeof createParserContext>;
 
-function pushArrayCache(
-  parser: ParserContext,
-  array: RedisResponse[],
-  pos: number,
-) {
+function pushArrayCache(parser: ParserContext, array: RedisResponse[], pos: number) {
   parser.arrayCache.push(array);
   parser.arrayPos.push(pos);
 }
@@ -46,6 +42,8 @@ function parseLength(parser: ParserContext) {
 
   while (offset < length) {
     const c1 = parser.buffer[offset++];
+
+    if (c1 === undefined) return;
 
     if (c1 === 13) {
       parser.offset = offset + 1;
@@ -107,7 +105,7 @@ function parseArray(parser: ParserContext) {
 
   if (length < 0) return null;
 
-  const responses = new Array(length);
+  const responses = Array.from({ length }, (): RedisResponse => null);
 
   return parseArrayElements(parser, responses, 0);
 }
@@ -128,6 +126,8 @@ function parseSimpleNumbers(parser: ParserContext) {
   while (offset < length) {
     const c1 = parser.buffer[offset++];
 
+    if (c1 === undefined) return;
+
     if (c1 === 13) {
       // \r\n
       parser.offset = offset + 1;
@@ -139,9 +139,7 @@ function parseSimpleNumbers(parser: ParserContext) {
 }
 
 function parseError(parser: ParserContext) {
-  return new Error(
-    decoder.decode(parseSimpleString(parser)) || "Unknown error",
-  );
+  return new Error(decoder.decode(parseSimpleString(parser)) || "Unknown error");
 }
 
 function handleError(parser: ParserContext, type: number) {
@@ -170,11 +168,7 @@ function parseType(parser: ParserContext, type: number) {
   }
 }
 
-function parseArrayElements(
-  parser: ParserContext,
-  responses: RedisResponse[],
-  startIndex: number,
-) {
+function parseArrayElements(parser: ParserContext, responses: RedisResponse[], startIndex: number) {
   if (!parser.buffer) throw new Error("Buffer is null");
 
   if (!Array.isArray(responses)) throw new Error("Responses is not an array");
@@ -186,10 +180,13 @@ function parseArrayElements(
   while (index < responses.length) {
     const offset = parser.offset;
 
-    if (parser.offset >= bufferLength)
-      return pushArrayCache(parser, responses, index);
+    if (parser.offset >= bufferLength) return pushArrayCache(parser, responses, index);
 
-    const response = parseType(parser, parser.buffer[parser.offset++]);
+    const type = parser.buffer[parser.offset++];
+
+    if (type === undefined) return pushArrayCache(parser, responses, index);
+
+    const response = parseType(parser, type);
 
     if (response === undefined) {
       if (!(parser.arrayCache.length > 0 || parser.bufferCache.length > 0)) {
@@ -207,11 +204,10 @@ function parseArrayElements(
 }
 
 function parseArrayChunks(parser: ParserContext) {
-  const tmp = parser.arrayCache.pop() as RedisResponse[];
+  const tmp = parser.arrayCache.pop();
   let pos = parser.arrayPos.pop();
 
-  if (!Array.isArray(tmp) || pos === undefined)
-    throw new Error("Array cache is empty");
+  if (!Array.isArray(tmp) || pos === undefined) throw new Error("Array cache is empty");
 
   if (parser.arrayCache.length > 0) {
     const res = parseArrayChunks(parser);
@@ -228,13 +224,9 @@ function decreaseBufferPool(context: ParserContext) {
   if (context.bufferPool && context.bufferPool.length > 50 * 1024) {
     if (context.counter === 1 || context.notDecreased > context.counter * 2) {
       const minSliceLen = Math.floor(context.bufferPool.length / 10);
-      const sliceLength =
-        minSliceLen < context.bufferOffset ? context.bufferOffset : minSliceLen;
+      const sliceLength = minSliceLen < context.bufferOffset ? context.bufferOffset : minSliceLen;
       context.bufferOffset = 0;
-      context.bufferPool = context.bufferPool.subarray(
-        sliceLength,
-        context.bufferPool.length,
-      );
+      context.bufferPool = context.bufferPool.subarray(sliceLength, context.bufferPool.length);
     } else {
       context.notDecreased++;
       context.counter--;
@@ -251,10 +243,7 @@ function decreaseBufferPool(context: ParserContext) {
 }
 
 function resizeBuffer(context: ParserContext, length: number) {
-  if (
-    context.bufferPool &&
-    context.bufferPool.length >= length + context.bufferOffset
-  ) {
+  if (context.bufferPool && context.bufferPool.length >= length + context.bufferOffset) {
     return;
   }
 
@@ -264,9 +253,7 @@ function resizeBuffer(context: ParserContext, length: number) {
     context.bufferOffset = 1024 * 1024 * 50;
   }
 
-  context.bufferPool = new Uint8Array(
-    length * multiplier + context.bufferOffset,
-  );
+  context.bufferPool = new Uint8Array(length * multiplier + context.bufferOffset);
   context.bufferOffset = 0;
   context.counter++;
 
@@ -285,13 +272,22 @@ function concatBulkBuffer(parser: ParserContext) {
 
   parser.offset = offset;
 
+  const first = list[0];
+
+  if (!first) throw new Error("Buffer cache is empty");
+
   if (offset <= 2) {
     if (chunks === 2) {
-      return list[0].slice(oldOffset, list[0].length + offset - 2);
+      return first.slice(oldOffset, first.length + offset - 2);
     }
 
     chunks--;
-    offset = list[list.length - 2].length + offset;
+
+    const previous = list[list.length - 2];
+
+    if (!previous) throw new Error("Buffer cache is empty");
+
+    offset = previous.length + offset;
   }
 
   resizeBuffer(parser, length);
@@ -299,9 +295,9 @@ function concatBulkBuffer(parser: ParserContext) {
 
   if (!parser.bufferPool) throw new Error("Buffer pool is null");
 
-  parser.bufferPool.set(list[0].subarray(oldOffset), start);
+  parser.bufferPool.set(first.subarray(oldOffset), start);
 
-  parser.bufferOffset += list[0].length - oldOffset;
+  parser.bufferOffset += first.length - oldOffset;
 
   for (const chunk of list.slice(1, chunks - 1)) {
     parser.bufferPool.set(chunk, parser.bufferOffset);
@@ -309,10 +305,11 @@ function concatBulkBuffer(parser: ParserContext) {
     parser.bufferOffset += chunk.length;
   }
 
-  parser.bufferPool.set(
-    list[chunks - 1].subarray(0, offset - 2),
-    parser.bufferOffset,
-  );
+  const last = list[chunks - 1];
+
+  if (!last) throw new Error("Buffer cache is empty");
+
+  parser.bufferPool.set(last.subarray(0, offset - 2), parser.bufferOffset);
   parser.bufferOffset += offset - 2;
 
   return parser.bufferPool.subarray(start, parser.bufferOffset);
@@ -368,7 +365,14 @@ function handleLargeStringCompletion(
   context.buffer = buffer;
 
   if (context.arrayCache.length > 0) {
-    (context.arrayCache[0] as RedisResponse[])[context.arrayPos[0]++] = tmp;
+    const target = context.arrayCache[0];
+    const pos = context.arrayPos[0];
+
+    if (!Array.isArray(target) || pos === undefined) throw new Error("Array cache is empty");
+
+    target[pos] = tmp;
+    context.arrayPos[0] = pos + 1;
+
     const result = parseArrayChunks(context);
 
     if (!result) return false;
@@ -385,15 +389,15 @@ function handleBufferCaching(context: ParserContext, buffer: Uint8Array) {
   context.totalChunkSize += buffer.length;
 }
 
-function processParsedResponses(
-  context: ParserContext,
-  options: CreateParserOptions,
-) {
+function processParsedResponses(context: ParserContext, options: CreateParserOptions) {
   if (!context.buffer) throw new Error("Buffer is null");
 
   while (context.offset < context.buffer.length) {
     const offset = context.offset;
     const type = context.buffer[context.offset++];
+
+    if (type === undefined) return false;
+
     const response = parseType(context, type);
 
     if (response === undefined) {

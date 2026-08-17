@@ -14,7 +14,5 @@ test("encode-command", () => {
   }
 
   expect(encoded.every((chunk) => chunk instanceof Uint8Array)).toBe(true);
-  expect(decoder.decode(merged)).toBe(
-    "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n",
-  );
+  expect(decoder.decode(merged)).toBe("*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n");
 });

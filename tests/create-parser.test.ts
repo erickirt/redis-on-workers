@@ -33,7 +33,7 @@ test("create-parser - error", () => {
 
   expect(responses.length).toBe(0);
   expect(errors.length).toBe(1);
-  expect(errors[0].message).toBe("ERR something went wrong");
+  expect(errors[0]?.message).toBe("ERR something went wrong");
 });
 
 test("create-parser - integer", () => {
@@ -135,10 +135,7 @@ test("create-parser - array", () => {
 
   expect(responses.length).toBe(1);
   expect(errors.length).toBe(0);
-  expect(responses[0]).toEqual([
-    new TextEncoder().encode("foo"),
-    new TextEncoder().encode("bar"),
-  ]);
+  expect(responses[0]).toEqual([new TextEncoder().encode("foo"), new TextEncoder().encode("bar")]);
 });
 
 test("create-parser - empty array", () => {
@@ -185,9 +182,7 @@ test("create-parser - nested array", () => {
   });
 
   // Nested array response
-  parser(
-    new TextEncoder().encode("*2\r\n*2\r\n:1\r\n:2\r\n*2\r\n:3\r\n:4\r\n"),
-  );
+  parser(new TextEncoder().encode("*2\r\n*2\r\n:1\r\n:2\r\n*2\r\n:3\r\n:4\r\n"));
 
   expect(responses.length).toBe(1);
   expect(errors.length).toBe(0);
@@ -207,9 +202,7 @@ test("create-parser - mixed array", () => {
   });
 
   // Mixed array with different types
-  parser(
-    new TextEncoder().encode("*4\r\n+OK\r\n:42\r\n$5\r\nhello\r\n$-1\r\n"),
-  );
+  parser(new TextEncoder().encode("*4\r\n+OK\r\n:42\r\n$5\r\nhello\r\n$-1\r\n"));
 
   expect(responses.length).toBe(1);
   expect(errors.length).toBe(0);
@@ -237,10 +230,7 @@ test("create-parser - chunked response", () => {
   expect(responses.length).toBe(2);
   expect(errors.length).toBe(0);
   expect(responses[0]).toEqual(new TextEncoder().encode("OK"));
-  expect(responses[1]).toEqual([
-    new TextEncoder().encode("foo"),
-    new TextEncoder().encode("bar"),
-  ]);
+  expect(responses[1]).toEqual([new TextEncoder().encode("foo"), new TextEncoder().encode("bar")]);
 });
 
 test("create-parser - large bulk string", () => {
@@ -258,9 +248,7 @@ test("create-parser - large bulk string", () => {
   const lengthStr = largeString.length.toString();
 
   // Send in chunks to simulate large response handling
-  const chunk1 = encoder.encode(
-    `$${lengthStr}\r\n${largeString.slice(0, 50000)}`,
-  );
+  const chunk1 = encoder.encode(`$${lengthStr}\r\n${largeString.slice(0, 50000)}`);
   const chunk2 = encoder.encode(`${largeString.slice(50000)}\r\n`);
 
   parser(chunk1);
@@ -471,7 +459,7 @@ test("create-parser - side effect isolation", () => {
 
   expect(responsesA[0]).toEqual(new TextEncoder().encode("OK"));
   expect(responsesA[1]).toBe(123);
-  expect(errorsB[0].message).toBe("ERROR from parser B");
+  expect(errorsB[0]?.message).toBe("ERROR from parser B");
 });
 
 test("create-parser - buffer state isolation", () => {
@@ -557,7 +545,7 @@ test("create-parser - memory pressure handling", () => {
   expect(responses.length).toBe(sizes.length);
 
   // Verify each response size is correct
-  responses.forEach((response, index) => {
-    expect((response as Uint8Array).length).toBe(sizes[index]);
-  });
+  expect(
+    responses.map((response) => (response instanceof Uint8Array ? response.length : -1)),
+  ).toEqual(sizes);
 });

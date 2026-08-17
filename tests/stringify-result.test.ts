@@ -32,9 +32,7 @@ test("stringifyResult - preserve numbers", () => {
   expect(stringifyResult(0)).toBe(0);
   expect(stringifyResult(-123)).toBe(-123);
   expect(stringifyResult(3.14)).toBe(3.14);
-  expect(stringifyResult(Number.MAX_SAFE_INTEGER)).toBe(
-    Number.MAX_SAFE_INTEGER,
-  );
+  expect(stringifyResult(Number.MAX_SAFE_INTEGER)).toBe(Number.MAX_SAFE_INTEGER);
 });
 
 test("stringifyResult - preserve null", () => {
@@ -63,10 +61,7 @@ test("stringifyResult - array processing", () => {
   const encoder = new TextEncoder();
 
   // Test array with strings
-  const stringArray: RedisResponse[] = [
-    encoder.encode("foo"),
-    encoder.encode("bar"),
-  ];
+  const stringArray: RedisResponse[] = [encoder.encode("foo"), encoder.encode("bar")];
   const stringResult = stringifyResult(stringArray);
   expect(stringResult).toEqual(["foo", "bar"]);
 

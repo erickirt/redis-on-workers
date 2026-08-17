@@ -45,17 +45,9 @@ test("full-text-search", async () => {
     ),
   ).toBe("OK");
 
-  expect(
-    await redis.send(
-      "FT.ADD",
-      "idx",
-      "doc:1",
-      "1.0",
-      "FIELDS",
-      "field1",
-      "value1",
-    ),
-  ).toBe("OK");
+  expect(await redis.send("FT.ADD", "idx", "doc:1", "1.0", "FIELDS", "field1", "value1")).toBe(
+    "OK",
+  );
 
   const searchResult1 = await redis.send("FT.SEARCH", "idx", "@field1:value1");
 
@@ -79,9 +71,7 @@ test("full-text-search", async () => {
 test("error-handling", async () => {
   const redis = createRedis("redis://localhost:6379/0");
 
-  expect(redis.sendOnce("MY_GO")).rejects.toThrow(
-    "ERR unknown command 'MY_GO'",
-  );
+  expect(redis.sendOnce("MY_GO")).rejects.toThrow("ERR unknown command 'MY_GO'");
 
   await redis.close();
 });

@@ -11,15 +11,11 @@ import { getConnectFn } from "./utils/get-connect-fn";
 import { stringifyResult } from "./utils/stringify-result";
 
 export class RedisInstance {
-  private static readonly connectionClosedError = new Error(
-    "Redis connection closed",
-  );
+  private static readonly connectionClosedError = new Error("Redis connection closed");
 
   private decoder = new TextDecoder();
 
-  private promiseQueue: ReturnType<
-    typeof Promise.withResolvers<RedisResponse>
-  >[] = [];
+  private promiseQueue: ReturnType<typeof Promise.withResolvers<RedisResponse>>[] = [];
   private writeChain = Promise.resolve();
 
   public options: CreateRedisOptions;
@@ -34,16 +30,13 @@ export class RedisInstance {
 
       logger?.(
         "Received reply",
-        reply instanceof Uint8Array
-          ? this.decoder.decode(reply)
-          : String(reply),
+        reply instanceof Uint8Array ? this.decoder.decode(reply) : String(reply),
       );
 
       this.promiseQueue.shift()?.resolve(reply);
     },
     onError: (err) => {
-      if (this.logger)
-        this.logger("Error", err.message, err.stack ?? "No stack");
+      if (this.logger) this.logger("Error", err.message, err.stack ?? "No stack");
 
       this.promiseQueue.shift()?.reject(err);
     },
@@ -98,8 +91,7 @@ export class RedisInstance {
 
           await this.startMessageListener(connection);
         } catch (e) {
-          listenerError =
-            e instanceof Error ? e : new Error(`Listener failed: ${String(e)}`);
+          listenerError = e instanceof Error ? e : new Error(`Listener failed: ${String(e)}`);
           this.logger?.(
             "Error sending command",
             listenerError.message,
@@ -117,8 +109,7 @@ export class RedisInstance {
 
   private getConnectConfig() {
     if ("url" in this.options) {
-      const { hostname, port, username, password, pathname, protocol } =
-        new URL(this.options.url);
+      const { hostname, port, username, password, pathname, protocol } = new URL(this.options.url);
 
       return {
         hostname,
@@ -130,14 +121,7 @@ export class RedisInstance {
       };
     }
 
-    const {
-      hostname: host,
-      username,
-      port,
-      password,
-      database,
-      tls,
-    } = this.options;
+    const { hostname: host, username, port, password, database, tls } = this.options;
 
     const resolvedPort = Number(port) || 6379;
 
@@ -154,11 +138,7 @@ export class RedisInstance {
   private async createConnection(): Promise<ConnectionInstance> {
     const connect = await getConnectFn(this.connectFn);
 
-    this.options.logger?.(
-      "Connecting to",
-      this.config.hostname,
-      this.config.port.toString(),
-    );
+    this.options.logger?.("Connecting to", this.config.hostname, this.config.port.toString());
 
     const socket = connect(
       {
@@ -171,10 +151,8 @@ export class RedisInstance {
       },
     );
 
-    const writer =
-      socket.writable.getWriter() as WritableStreamDefaultWriter<Uint8Array>;
-    const reader =
-      socket.readable.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+    const writer = socket.writable.getWriter() as WritableStreamDefaultWriter<Uint8Array>;
+    const reader = socket.readable.getReader() as ReadableStreamDefaultReader<Uint8Array>;
 
     return {
       socket,
@@ -286,10 +264,7 @@ export class RedisInstance {
 
   private async startMessageListener(connection: ConnectionInstance) {
     while (true) {
-      const result = await Promise.race([
-        connection.socket.closed,
-        connection.reader.read(),
-      ]);
+      const result = await Promise.race([connection.socket.closed, connection.reader.read()]);
 
       if (!result) {
         this.logger?.("Socket closed while reading");
@@ -316,10 +291,7 @@ export class RedisInstance {
       : undefined;
 
     const closeError =
-      err ??
-      (this.promiseQueue.length > 0
-        ? RedisInstance.connectionClosedError
-        : undefined);
+      err ?? (this.promiseQueue.length > 0 ? RedisInstance.connectionClosedError : undefined);
 
     this.connectionInstance = undefined;
     this.isInitialized = false;

@@ -3,12 +3,7 @@ import type { connect as nodeConnect } from "@arrowood.dev/socket";
 
 export type Command = [string, ...(string | number | Uint8Array)[]];
 
-export type RedisResponse =
-  | Uint8Array
-  | number
-  | null
-  | Error
-  | RedisResponse[];
+export type RedisResponse = Uint8Array | number | null | Error | RedisResponse[];
 
 export type StringifyRedisResponse =
   | Exclude<RedisResponse, Uint8Array>
