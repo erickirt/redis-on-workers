@@ -38,14 +38,3 @@ export type RedisConnectionOptions =
     };
 
 export type CreateRedisOptions = BaseRedisOptions & RedisConnectionOptions;
-
-export interface CreateParserOptions {
-  onReply: (reply: RedisResponse) => void;
-  onError: (err: Error) => void;
-}
-
-export interface ConnectionInstance {
-  writer: WritableStreamDefaultWriter<Uint8Array>;
-  reader: ReadableStreamDefaultReader<Uint8Array>;
-  socket: ReturnType<typeof connect | typeof nodeConnect>;
-}

@@ -1,4 +1,4 @@
 export * from "./create-redis";
-export type * from "./type";
-export * from "./lib/redis-instance";
+export * from "./lib/redis";
 export * from "./lib/utils/get-connect-fn";
+export type * from "./type";
