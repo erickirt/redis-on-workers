@@ -1,7 +1,7 @@
-import type { Command, CreateRedisOptions, RedisConnectConfig, RedisResponse } from "../type";
-import { Connection } from "./connection";
-import { encodeCommand } from "./utils/encode-command";
-import { stringifyResult } from "./utils/stringify-result";
+import type { Command, CreateRedisOptions, RedisConnectConfig, RedisResponse } from "~/type";
+import { Connection } from "~/lib/connection";
+import { encodeCommand } from "~/lib/utils/encode-command";
+import { stringifyResult } from "~/lib/utils/stringify-result";
 
 const connectionClosedError = new Error("Redis connection closed");
 
@@ -41,60 +41,31 @@ function initCommands(config: RedisConnectConfig) {
 }
 
 export class Redis {
-  readonly config: RedisConnectConfig;
+  private config: RedisConnectConfig;
 
   private connection?: Promise<Connection>;
   private pending: PromiseWithResolvers<RedisResponse>[] = [];
-  private writeChain = Promise.resolve();
 
-  constructor(readonly options: CreateRedisOptions) {
+  constructor(private options: CreateRedisOptions) {
     this.config = parseConnectConfig(options);
   }
 
+  /** Send a command; bulk strings in the reply decode to JS strings. */
   async send(...command: Command) {
     return stringifyResult(await this.sendRaw(...command));
   }
 
+  /** Send a command and get the raw reply, bulk strings as Uint8Array. */
   async sendRaw(...command: Command) {
-    const [reply] = await this.dispatch([command]);
+    this.connection ??= this.open().catch((error) => {
+      this.connection = undefined;
+      throw error;
+    });
 
-    return reply ?? null;
+    return this.request(await this.connection, command);
   }
 
-  async sendOnce(...command: Command) {
-    try {
-      return await this.send(...command);
-    } finally {
-      await this.close();
-    }
-  }
-
-  async sendOnceRaw(...command: Command) {
-    try {
-      return await this.sendRaw(...command);
-    } finally {
-      await this.close();
-    }
-  }
-
-  async pipeline(commands: Command[]) {
-    return (await this.pipelineRaw(commands)).map(stringifyResult);
-  }
-
-  pipelineRaw(commands: Command[]) {
-    return this.dispatch(commands);
-  }
-
-  async isConnected() {
-    if (!this.connection) return false;
-
-    try {
-      return Boolean(await this.connection);
-    } catch {
-      return false;
-    }
-  }
-
+  /** Reject in-flight commands and close the socket; the next send reconnects. */
   async close(reason?: Error) {
     const pending = this.pending;
     const connection = this.connection ? await this.connection.catch(() => undefined) : undefined;
@@ -102,7 +73,6 @@ export class Redis {
 
     this.connection = undefined;
     this.pending = [];
-    this.writeChain = Promise.resolve();
 
     if (error) {
       for (const reply of pending) {
@@ -117,20 +87,21 @@ export class Redis {
     await this.close();
   }
 
-  private async dispatch(commands: Command[]) {
-    this.connection ??= this.open().catch((error) => {
-      this.connection = undefined;
-      throw error;
-    });
+  private async request(connection: Connection, command: Command) {
+    const reply = Promise.withResolvers<RedisResponse>();
 
-    const connection = await this.connection;
+    this.pending.push(reply);
 
     try {
-      return await this.write(connection, commands);
+      await connection.write(
+        encodeCommand(command.map((arg) => (arg instanceof Uint8Array ? arg : String(arg)))),
+      );
     } catch (error) {
       await this.close(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
+
+    return reply.promise;
   }
 
   private async open() {
@@ -138,9 +109,9 @@ export class Redis {
 
     void this.pump(connection);
 
-    const init = initCommands(this.config);
-
-    if (init.length > 0) await this.write(connection, init);
+    for (const command of initCommands(this.config)) {
+      await this.request(connection, command);
+    }
 
     return connection;
   }
@@ -169,27 +140,5 @@ export class Redis {
     }
 
     if (this.connection === active) await this.close();
-  }
-
-  private async write(connection: Connection, commands: Command[]) {
-    const replies = commands.map(() => Promise.withResolvers<RedisResponse>());
-
-    this.pending.push(...replies);
-
-    const chunks = commands.flatMap((command) =>
-      encodeCommand(command.map((arg) => (arg instanceof Uint8Array ? arg : String(arg)))),
-    );
-
-    await this.enqueueWrite(() => connection.write(chunks));
-
-    return Promise.all(replies.map((reply) => reply.promise));
-  }
-
-  private enqueueWrite(operation: () => Promise<void>) {
-    const next = this.writeChain.then(operation);
-
-    this.writeChain = next.catch(() => {});
-
-    return next;
   }
 }

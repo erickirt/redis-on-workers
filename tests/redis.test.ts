@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { createRedis } from "../src";
-import { decodeResp } from "../src/lib/resp";
+import { createRedis } from "~/index";
+import { decodeResp } from "~/lib/resp";
 
 const decoder = new TextDecoder();
 
@@ -27,12 +27,15 @@ function createPushReader() {
 
 function startFakeRedis(handler: (command: string[]) => string) {
   const commands: string[][] = [];
+  const sockets = { opened: 0, closed: 0 };
 
   const server = Bun.listen<{ push(chunk: Uint8Array): void }>({
     hostname: "127.0.0.1",
     port: 0,
     socket: {
       open(socket) {
+        sockets.opened++;
+
         const reader = createPushReader();
 
         socket.data = reader;
@@ -53,14 +56,26 @@ function startFakeRedis(handler: (command: string[]) => string) {
       data(socket, chunk) {
         socket.data.push(new Uint8Array(chunk));
       },
+      close() {
+        sockets.closed++;
+      },
     },
   });
 
   return {
     url: `redis://127.0.0.1:${server.port}`,
     commands,
+    sockets,
     stop: () => server.stop(true),
   };
+}
+
+async function waitFor(condition: () => boolean) {
+  for (let attempt = 0; attempt < 50 && !condition(); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  expect(condition()).toBe(true);
 }
 
 function defaultHandler(command: string[]) {
@@ -84,28 +99,28 @@ test("send and sendRaw", async () => {
   const server = startFakeRedis(defaultHandler);
 
   try {
-    const redis = createRedis(server.url);
+    await using redis = createRedis(server.url);
 
     expect(await redis.sendRaw("PING")).toEqual(new TextEncoder().encode("PONG"));
     expect(await redis.send("SET", "foo", "bar")).toBe("OK");
     expect(await redis.send("GET", "foo")).toBe("bar");
-    expect(await redis.isConnected()).toBe(true);
 
-    await redis.close();
-
-    expect(await redis.isConnected()).toBe(false);
+    expect(server.sockets.opened).toBe(1);
   } finally {
     server.stop();
   }
 });
 
-test("error reply rejects", async () => {
+test("error reply rejects and keeps the connection open", async () => {
   const server = startFakeRedis(defaultHandler);
 
   try {
-    const redis = createRedis(server.url);
+    await using redis = createRedis(server.url);
 
-    expect(redis.sendOnce("MY_GO")).rejects.toThrow("ERR unknown command 'MY_GO'");
+    expect(redis.send("MY_GO")).rejects.toThrow("ERR unknown command 'MY_GO'");
+    expect(await redis.send("PING")).toBe("PONG");
+
+    expect(server.sockets.opened).toBe(1);
   } finally {
     server.stop();
   }
@@ -115,10 +130,9 @@ test("auth and select run before the first command", async () => {
   const server = startFakeRedis(defaultHandler);
 
   try {
-    const redis = createRedis(`${server.url.replace("redis://", "redis://user:secret@")}/2`);
+    await using redis = createRedis(`${server.url.replace("redis://", "redis://user:secret@")}/2`);
 
     await redis.send("PING");
-    await redis.close();
 
     expect(server.commands.slice(0, 2)).toEqual([
       ["AUTH", "user", "secret"],
@@ -133,30 +147,31 @@ test("concurrent sends keep replies matched", async () => {
   const server = startFakeRedis(defaultHandler);
 
   try {
-    const redis = createRedis(server.url);
+    await using redis = createRedis(server.url);
 
     const payloads = Array.from({ length: 10 }, (_, index) => `value-${index}`);
     const replies = await Promise.all(payloads.map((payload) => redis.send("ECHO", payload)));
 
     expect(replies).toEqual(payloads);
-
-    await redis.close();
+    expect(server.sockets.opened).toBe(1);
   } finally {
     server.stop();
   }
 });
 
-test("pipeline returns replies in order", async () => {
+test("close disconnects and the next send reconnects", async () => {
   const server = startFakeRedis(defaultHandler);
 
   try {
     const redis = createRedis(server.url);
 
-    expect(await redis.pipeline([["SET", "foo", "bar"], ["GET", "foo"], ["PING"]])).toEqual([
-      "OK",
-      "bar",
-      "PONG",
-    ]);
+    expect(await redis.send("PING")).toBe("PONG");
+
+    await redis.close();
+    await waitFor(() => server.sockets.closed === 1);
+
+    expect(await redis.send("PING")).toBe("PONG");
+    expect(server.sockets.opened).toBe(2);
 
     await redis.close();
   } finally {
@@ -168,16 +183,13 @@ test("await using closes the connection", async () => {
   const server = startFakeRedis(defaultHandler);
 
   try {
-    let leaked: ReturnType<typeof createRedis> | undefined;
-
     {
       await using redis = createRedis(server.url);
 
       await redis.send("PING");
-      leaked = redis;
     }
 
-    expect(await leaked.isConnected()).toBe(false);
+    await waitFor(() => server.sockets.closed === server.sockets.opened);
   } finally {
     server.stop();
   }

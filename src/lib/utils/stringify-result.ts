@@ -1,4 +1,4 @@
-import type { RedisResponse, StringifyRedisResponse } from "../../type";
+import type { RedisResponse, StringifyRedisResponse } from "~/type";
 
 const decoder = new TextDecoder();
 

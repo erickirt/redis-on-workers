@@ -1,4 +1,4 @@
-import type { CreateRedisOptions } from "../../type";
+import type { CreateRedisOptions } from "~/type";
 
 export async function getConnectFn(fn?: CreateRedisOptions["connectFn"]) {
   if (fn) return fn;

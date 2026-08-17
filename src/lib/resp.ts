@@ -1,6 +1,9 @@
-import type { RedisResponse } from "../type";
+import type { RedisResponse } from "~/type";
 
 const decoder = new TextDecoder();
+
+/** An error reply from the server, as opposed to a transport failure. */
+export class RedisError extends Error {}
 
 export interface RespReader {
   read(): Promise<{ value?: Uint8Array; done: boolean }>;
@@ -91,7 +94,7 @@ function parseError(buffer: Uint8Array, offset: number): Parsed | undefined {
   if (end === undefined) return;
 
   return {
-    value: new Error(decoder.decode(buffer.subarray(offset, end)) || "Unknown error"),
+    value: new RedisError(decoder.decode(buffer.subarray(offset, end)) || "Unknown error"),
     offset: end + 2,
   };
 }

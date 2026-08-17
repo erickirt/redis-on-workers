@@ -1,8 +1,8 @@
 import type { connect as nodeConnect } from "@arrowood.dev/socket";
 import type { connect } from "cloudflare:sockets";
-import type { CreateRedisOptions, RedisConnectConfig, RedisResponse } from "../type";
-import { decodeResp, type RespReader } from "./resp";
-import { getConnectFn } from "./utils/get-connect-fn";
+import type { CreateRedisOptions, RedisConnectConfig, RedisResponse } from "~/type";
+import { decodeResp, type RespReader } from "~/lib/resp";
+import { getConnectFn } from "~/lib/utils/get-connect-fn";
 
 type Socket = ReturnType<typeof connect | typeof nodeConnect>;
 
@@ -45,10 +45,8 @@ export class Connection {
     return new Connection(socket);
   }
 
-  async write(chunks: Uint8Array[]) {
-    for (const chunk of chunks) {
-      await this.writer.write(chunk);
-    }
+  write(payload: Uint8Array) {
+    return this.writer.write(payload);
   }
 
   async close(reason?: Error) {

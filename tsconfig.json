@@ -7,6 +7,9 @@
     "types": ["@cloudflare/workers-types", "bun"],
 
     "moduleResolution": "bundler",
+    "paths": {
+      "~/*": ["./src/*"]
+    },
     "verbatimModuleSyntax": true,
     "noEmit": true,
 

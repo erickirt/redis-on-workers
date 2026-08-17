@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { decodeResp } from "../src/lib/resp";
-import type { RedisResponse } from "../src/type";
+import { decodeResp } from "~/lib/resp";
+import type { RedisResponse } from "~/type";
 
 const encoder = new TextEncoder();
 

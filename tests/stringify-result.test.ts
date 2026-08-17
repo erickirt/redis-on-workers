@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { stringifyResult } from "../src/lib/utils/stringify-result";
-import type { RedisResponse } from "../src/type";
+import { stringifyResult } from "~/lib/utils/stringify-result";
+import type { RedisResponse } from "~/type";
 
 test("stringifyResult - Uint8Array to string", () => {
   const encoder = new TextEncoder();

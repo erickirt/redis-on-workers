@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Socket } from "@arrowood.dev/socket";
-import { getConnectFn } from "../src";
+import { getConnectFn } from "~/lib/utils/get-connect-fn";
 
 test("get-connect-fn", async () => {
   expect(await getConnectFn()).toBeInstanceOf(Function);
