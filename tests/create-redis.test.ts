@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createRedis } from "../src";
+import { createRedis } from "~/index";
 
 test("create-redis", async () => {
   const redis = createRedis("redis://localhost:6379/0");
@@ -16,13 +16,13 @@ test("create-redis", async () => {
 
   expect(await redis.send("DEL", "foo")).toBe(1);
 
-  expect(await redis.isConnected()).toBe(true);
+  expect(await redis.send("GET", "foo")).toBe(null);
 
-  expect(await redis.sendOnce("GET", "foo")).toBe(null);
+  await redis.close();
 
-  expect(await redis.isConnected()).toBe(false);
+  expect(await redis.send("PING")).toBe("PONG");
 
-  expect(await redis.sendOnce("PING")).toBe("PONG");
+  await redis.close();
 });
 
 test("full-text-search", async () => {
@@ -45,17 +45,9 @@ test("full-text-search", async () => {
     ),
   ).toBe("OK");
 
-  expect(
-    await redis.send(
-      "FT.ADD",
-      "idx",
-      "doc:1",
-      "1.0",
-      "FIELDS",
-      "field1",
-      "value1",
-    ),
-  ).toBe("OK");
+  expect(await redis.send("FT.ADD", "idx", "doc:1", "1.0", "FIELDS", "field1", "value1")).toBe(
+    "OK",
+  );
 
   const searchResult1 = await redis.send("FT.SEARCH", "idx", "@field1:value1");
 
@@ -79,9 +71,9 @@ test("full-text-search", async () => {
 test("error-handling", async () => {
   const redis = createRedis("redis://localhost:6379/0");
 
-  expect(redis.sendOnce("MY_GO")).rejects.toThrow(
-    "ERR unknown command 'MY_GO'",
-  );
+  expect(redis.send("MY_GO")).rejects.toThrow("ERR unknown command 'MY_GO'");
+
+  expect(await redis.send("PING")).toBe("PONG");
 
   await redis.close();
 });
